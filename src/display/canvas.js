@@ -28,6 +28,7 @@ import {
   warn,
 } from "../shared/util.js";
 import { getShadingPatternFromIR, TilingPattern } from "./pattern_helper.js";
+import { ScaleJS } from "./scale.js";
 
 // <canvas> contexts store most of the state we need natively.
 // However, PDF needs a bit more state, which we store here.
@@ -680,6 +681,26 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
 
         ctx.putImageData(chunkImgData, 0, i * FULL_CHUNK_HEIGHT);
       }
+    } else if (imgData.kind === ImageKind.GRAYSCALE_8BPP) {
+      // Grayscale, 8-bits per pixel.
+      thisChunkHeight = FULL_CHUNK_HEIGHT;
+      elemsInThisChunk = width * thisChunkHeight;
+      for (i = 0; i < totalChunks; i++) {
+        if (i >= fullChunks) {
+          thisChunkHeight = partialChunkHeight;
+          elemsInThisChunk = width * thisChunkHeight;
+        }
+
+        destPos = 0;
+        for (j = elemsInThisChunk; j--;) {
+          dest[destPos++] = src[srcPos];
+          dest[destPos++] = src[srcPos];
+          dest[destPos++] = src[srcPos];
+          dest[destPos++] = 255;
+          srcPos++;
+        }
+        ctx.putImageData(chunkImgData, 0, i * FULL_CHUNK_HEIGHT);
+      }
     } else {
       throw new Error(`bad image kind: ${imgData.kind}`);
     }
@@ -696,27 +717,47 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
     var srcPos = 0;
     var src = imgData.data;
     var dest = chunkImgData.data;
+    var thisChunkHeight, i, destPos;
 
-    for (var i = 0; i < totalChunks; i++) {
-      var thisChunkHeight =
-        i < fullChunks ? FULL_CHUNK_HEIGHT : partialChunkHeight;
-
-      // Expand the mask so it can be used by the canvas.  Any required
-      // inversion has already been handled.
-      var destPos = 3; // alpha component offset
-      for (var j = 0; j < thisChunkHeight; j++) {
-        var mask = 0;
-        for (var k = 0; k < width; k++) {
-          if (!mask) {
-            var elem = src[srcPos++];
-            mask = 128;
-          }
-          dest[destPos] = elem & mask ? 0 : 255;
-          destPos += 4;
-          mask >>= 1;
+    if (imgData.isMaskScaled) {
+      thisChunkHeight = FULL_CHUNK_HEIGHT;
+      var elemsInThisChunk = width * thisChunkHeight;
+      for (i = 0; i < totalChunks; i++) {
+        if (i >= fullChunks) {
+          thisChunkHeight = partialChunkHeight;
+          elemsInThisChunk = width * thisChunkHeight;
         }
+        destPos = 3;
+        for (j = elemsInThisChunk; j--;) {
+          dest[destPos] = 255 - src[srcPos];
+          destPos += 4;
+          srcPos++;
+        }
+        ctx.putImageData(chunkImgData, 0, i * FULL_CHUNK_HEIGHT);
       }
-      ctx.putImageData(chunkImgData, 0, i * FULL_CHUNK_HEIGHT);
+    } else {
+      // 1-bit per pixel
+      for (i = 0; i < totalChunks; i++) {
+        thisChunkHeight =
+          i < fullChunks ? FULL_CHUNK_HEIGHT : partialChunkHeight;
+
+        // Expand the mask so it can be used by the canvas.  Any required
+        // inversion has already been handled.
+        destPos = 3; // alpha component offset
+        for (var j = 0; j < thisChunkHeight; j++) {
+          var mask = 0;
+          for (var k = 0; k < width; k++) {
+            if (!mask) {
+              var elem = src[srcPos++];
+              mask = 128;
+            }
+            dest[destPos] = elem & mask ? 0 : 255;
+            destPos += 4;
+            mask >>= 1;
+          }
+        }
+        ctx.putImageData(chunkImgData, 0, i * FULL_CHUNK_HEIGHT);
+      }
     }
   }
 
@@ -2231,6 +2272,9 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       if (!this.contentVisible) {
         return;
       }
+      if (!img.scaleProcessed) {
+        img = new ScaleJS().scaleMask(img);
+      }
       var ctx = this.ctx;
       var width = img.width,
         height = img.height;
@@ -2285,6 +2329,9 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       if (!this.contentVisible) {
         return;
       }
+      if (!imgData.scaleProcessed) {
+        imgData = new ScaleJS().scaleMask(imgData);
+      }
       var width = imgData.width;
       var height = imgData.height;
       var fillColor = this.current.fillColor;
@@ -2338,6 +2385,9 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
       var isPatternFill = this.current.patternFill;
       for (var i = 0, ii = images.length; i < ii; i++) {
         var image = images[i];
+        if (!image.scaleProcessed) {
+          image = new ScaleJS().scaleMask(image);
+        }
         var width = image.width,
           height = image.height;
 
@@ -2420,6 +2470,9 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
     ) {
       if (!this.contentVisible) {
         return;
+      }
+      if (!imgData.scaleProcessed) {
+        imgData = new ScaleJS().scaleImg(imgData);
       }
       var width = imgData.width;
       var height = imgData.height;
@@ -2525,6 +2578,9 @@ var CanvasGraphics = (function CanvasGraphicsClosure() {
     ) {
       if (!this.contentVisible) {
         return;
+      }
+      if (!imgData.scaleProcessed) {
+        imgData = new ScaleJS().scaleImg(imgData);
       }
       var ctx = this.ctx;
       var w = imgData.width;
