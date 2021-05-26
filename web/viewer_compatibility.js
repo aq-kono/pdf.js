@@ -25,7 +25,7 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
   const isAndroid = /Android/.test(userAgent);
   const isIE = /Trident/.test(userAgent);
   const isIOS =
-    /\b(iPad|iPhone|iPod)(?=;)/.test(userAgent) ||
+    /\b(Macintosh|iPad|iPhone|iPod)(?=;)/.test(userAgent) ||
     (platform === "MacIntel" && maxTouchPoints > 1);
   const isIOSChrome = /CriOS/.test(userAgent);
 

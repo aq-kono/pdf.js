@@ -4,7 +4,7 @@ class ScaleJS {
   isMobile() {
     if (typeof navigator !== "undefined") {
       return (
-        /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+        /Macintosh|iPad|iPhone|iPod/.test(navigator.userAgent) &&
         window &&
         !window.MSStream
       );
@@ -26,6 +26,11 @@ class ScaleJS {
         context.fillStyle = testColor;
         context.fillRect(0, 0, 1, 1);
         colorData = context.getImageData(0, 0, 1, 1).data;
+      }
+      while (canvas.width >= 4096 || canvas.height >= 4096) {
+        scale += 1;
+        canvas.width = width / scale;
+        canvas.height = height / scale;
       }
     }
     return scale;
